@@ -1,0 +1,30 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: multizone-ingress
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - local.example.com
+    secretName: local-example-com-tls
+  rules:
+  - host: local.example.com
+    http:
+      paths:
+      # Admin zone - must come first (more specific path)
+      - path: /admin
+        pathType: Prefix
+        backend:
+          service:
+            name: zone-admin
+            port:
+              number: 80
+      # Main zone - catch-all
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: zone-main
+            port:
+              number: 80
