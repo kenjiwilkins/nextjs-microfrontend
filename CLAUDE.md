@@ -106,6 +106,20 @@ poc/
 
 ---
 
+# 💻 Git Commit Guidelines
+
+When creating git commits:
+
+* **Author**: All commits should be authored by the user only
+* **Co-authorship**: Do NOT include "Co-Authored-By: Claude" or similar AI attribution
+* **Attribution**: Do NOT add "Generated with Claude Code" footers or banners
+* **Messages**: Write clear, concise commit messages describing the changes
+* **Format**: Use conventional commit format when appropriate
+
+The user is the sole author of all code and commits in this repository.
+
+---
+
 # 🏁 End of Claude.md
 
 This file should remain concise and focused on helping AI assistants provide accurate, context-aware guidance for the PoC.

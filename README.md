@@ -76,7 +76,11 @@ Tilt will:
 - Set up live reloading
 - Forward ports for direct access
 
-Press `space` to open the Tilt UI in your browser, where you can monitor builds and logs.
+**Access the Tilt UI:**
+- If running in the foreground: press `space` to open the browser
+- Or visit: http://localhost:10350/
+
+The Tilt UI lets you monitor builds, view logs, and check resource status.
 
 ### 4. Access the Application
 
