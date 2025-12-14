@@ -1,0 +1,30 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: seed-database
+  labels:
+    app: seed
+spec:
+  # Only keep successful job for 5 minutes
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        app: seed
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: seed
+        image: backend-seed:latest
+        env:
+        # PostgreSQL database connection settings
+        - name: DB_HOST
+          value: "postgres"
+        - name: DB_PORT
+          value: "5432"
+        - name: DB_USER
+          value: "admin"
+        - name: DB_PASSWORD
+          value: "devpassword"
+        - name: DB_NAME
+          value: "multizone"

@@ -42,6 +42,14 @@ k8s_resource(
   labels=['zones']
 )
 
+# Deploy PostgreSQL database
+k8s_yaml('./k8s/postgres.yaml')
+k8s_resource(
+  'postgres',
+  port_forwards='5432:5432',
+  labels=['database']
+)
+
 # Build backend Docker image (Go application)
 docker_build(
   'backend',
@@ -49,12 +57,30 @@ docker_build(
   dockerfile='./apps/backend/Dockerfile'
 )
 
-# Deploy backend
+# Deploy backend (depends on postgres)
 k8s_yaml('./k8s/backend.yaml')
 k8s_resource(
   'backend',
   port_forwards='8080:8080',
-  labels=['backend']
+  labels=['backend'],
+  resource_deps=['postgres']  # Wait for postgres to be ready
+)
+
+# Build seed job Docker image
+docker_build(
+  'backend-seed',
+  context='./apps/backend',
+  dockerfile='./apps/backend/Dockerfile.seed'
+)
+
+# Manual database seed job - trigger from Tilt UI
+local_resource(
+  'seed-database',
+  cmd='kubectl delete job seed-database --ignore-not-found && kubectl apply -f k8s/seed-job.yaml',
+  labels=['database'],
+  resource_deps=['postgres'],
+  auto_init=False,  # Don't run automatically
+  trigger_mode=TRIGGER_MODE_MANUAL  # Only run when manually triggered
 )
 
 # Deploy ingress
@@ -72,5 +98,6 @@ print("""
 ║  zone-main:    http://localhost:3001                        ║
 ║  zone-admin:   http://localhost:3002                        ║
 ║  backend-api:  http://localhost:8080                        ║
+║  postgres:     localhost:5432 (user: admin, db: multizone)  ║
 ╚══════════════════════════════════════════════════════════════╝
 """)
