@@ -1,36 +1,76 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# zone-main
 
-## Getting Started
+Main landing page zone for the Next.js Multi-Zone PoC.
 
-First, run the development server:
+## Overview
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+This is the primary Next.js application that serves the root path (`/`) of `local.example.com`. It demonstrates a simple, clean landing page for the multi-zone architecture.
+
+## Configuration
+
+### Next.js Config (`next.config.ts`)
+
+```typescript
+const nextConfig: NextConfig = {
+  reactCompiler: true,
+  output: 'standalone',
+};
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+- **No basePath**: Serves from root path `/`
+- **Standalone output**: Optimized for containerized deployment
+- **React Compiler**: Enabled for improved performance
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Routes
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `/` - Main landing page
+
+## Deployment
+
+This zone runs as a Kubernetes Deployment with:
+- **Replicas**: 2 (for high availability demonstration)
+- **Port**: 3000 (internal)
+- **Port Forward**: 3001 (for direct access during development)
+
+### Kubernetes Resources
+
+- Deployment: `zone-main`
+- Service: `zone-main` (ClusterIP)
+- Ingress: Routes `/` to this service
+
+## Docker
+
+The Dockerfile uses a multi-stage build:
+
+1. **deps**: Install dependencies with pnpm
+2. **builder**: Build the Next.js application
+3. **runner**: Minimal production image running the standalone server
+
+## Development
+
+When running with Tilt, this zone has live reload enabled. Changes to files will automatically trigger rebuilds.
+
+### Local Development (without Tilt)
+
+```bash
+cd apps/zone-main
+pnpm install
+pnpm dev
+```
+
+Visit: http://localhost:3000
+
+## Environment Variables
+
+Currently, this zone does not use environment variables, but you can add them in:
+- `.env.local` for local development
+- Kubernetes manifest (`k8s/zone-main.yaml`) for production deployment
+
+## Styling
+
+Uses Tailwind CSS with a blue color scheme to distinguish from the admin zone (purple).
 
 ## Learn More
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- [Next.js Documentation](https://nextjs.org/docs)
+- [Next.js Multi-Zones](https://nextjs.org/docs/pages/building-your-application/deploying/multi-zones)

@@ -2,17 +2,30 @@
 
 A Proof of Concept demonstrating a local multi-zone Next.js architecture using Kubernetes (kind), Tilt, and mkcert for local HTTPS development.
 
+## ⚠️ Security Notice
+
+**This is a local development PoC only. DO NOT use in production.**
+
+- Database password is intentionally hardcoded as `"devpassword"` for local testing
+- All services run on localhost without authentication
+- Certificates must be generated locally with mkcert
+- This project is for learning and demonstration purposes only
+
 ## Architecture
 
-This PoC runs two Next.js applications as separate "zones" under a single domain:
+This PoC runs two Next.js applications as separate "zones" under a single domain, with a Go backend API and PostgreSQL database:
 
 ```
 local.example.com
  ├── /           → zone-main (Next.js app #1)
- └── /admin      → zone-admin (Next.js app #2)
+ └── /admin      → zone-admin (Next.js app #2) + User Management UI
+
+Backend Services:
+ ├── backend     → Go API (health checks, user CRUD, database seeding)
+ └── postgres    → PostgreSQL database (user data)
 ```
 
-Each zone runs in its own Kubernetes Pod with separate Services. An Ingress controller routes requests based on path prefixes.
+Each zone runs in its own Kubernetes Pod with separate Services. An Ingress controller routes requests based on path prefixes. The backend provides health monitoring and user management APIs consumed by the admin zone.
 
 ## Prerequisites
 
@@ -92,6 +105,42 @@ Once Tilt shows all resources are ready:
 **Direct Pod Access** (for debugging):
 - zone-main: [http://localhost:3001](http://localhost:3001)
 - zone-admin: [http://localhost:3002](http://localhost:3002)
+- backend API: [http://localhost:8080](http://localhost:8080)
+- postgres: `localhost:5432` (user: `admin`, password: `devpassword`, db: `multizone`)
+
+## Features
+
+### Backend API Endpoints
+
+The Go backend provides the following REST API endpoints:
+
+- `GET /health` - Backend health check
+- `GET /api/zones/status` - Health status of all Next.js zones
+- `GET /api/users` - List all users
+- `POST /api/users` - Create a new user
+- `GET /api/users/{id}` - Get a specific user
+- `DELETE /api/users/{id}` - Delete a user
+- `POST /api/seed` - Seed the database with sample users
+
+### Admin Zone Features
+
+The admin zone (`/admin`) includes:
+
+- **Health Monitoring**: Real-time health status display for zone-main
+- **User Management**: Full CRUD interface for managing users
+  - Create new users with name and email
+  - View all users in a list
+  - Delete users with confirmation
+  - Seed database with 5 sample users (Alice, Bob, Charlie, Diana, Eve)
+
+### Database Seeding
+
+You can seed the database in two ways:
+
+1. **From Admin UI**: Click the "Seed Database" button in the User Management section
+2. **From Tilt UI**: Trigger the `seed-database` resource (manual trigger)
+
+Both methods add the same 5 sample users, skipping any that already exist.
 
 ## Project Structure
 
@@ -102,15 +151,30 @@ Once Tilt shows all resources are ready:
 │   │   ├── app/
 │   │   ├── Dockerfile
 │   │   ├── next.config.ts
-│   │   └── package.json
-│   └── zone-admin/         # Admin Next.js application (/admin)
-│       ├── app/
+│   │   ├── package.json
+│   │   └── README.md
+│   ├── zone-admin/         # Admin Next.js application (/admin)
+│   │   ├── app/
+│   │   │   └── components/
+│   │   │       └── UserManagement.tsx  # User CRUD UI
+│   │   ├── Dockerfile
+│   │   ├── next.config.ts
+│   │   ├── package.json
+│   │   └── README.md
+│   └── backend/            # Go API backend
+│       ├── main.go         # Main API server (health, CRUD endpoints)
+│       ├── seed.go         # Database seeding script
 │       ├── Dockerfile
-│       ├── next.config.ts
-│       └── package.json
+│       ├── Dockerfile.seed # Seed job container
+│       ├── go.mod
+│       ├── go.sum
+│       └── README.md
 ├── k8s/
 │   ├── zone-main.yaml      # Deployment & Service for zone-main
 │   ├── zone-admin.yaml     # Deployment & Service for zone-admin
+│   ├── backend.yaml        # Deployment & Service for backend
+│   ├── postgres.yaml       # StatefulSet & Service for PostgreSQL
+│   ├── seed-job.yaml       # Kubernetes Job for database seeding
 │   └── ingress.yaml        # Ingress for routing
 ├── certs/
 │   ├── local.example.com.pem       # Generated locally (gitignored)
@@ -267,26 +331,29 @@ cat /etc/hosts | grep local.example.com
 
 ## What This PoC Demonstrates
 
-- Multiple Next.js applications running as separate zones
-- Path-based routing via Kubernetes Ingress
-- Local HTTPS with mkcert certificates
-- Separate Pod deployment per zone
-- Live reload development workflow with Tilt
-- Docker containerization of Next.js apps
+- **Multi-Zone Architecture**: Multiple Next.js applications running as separate zones
+- **Path-Based Routing**: Kubernetes Ingress routing requests by URL path
+- **Local HTTPS**: Secure development with mkcert certificates
+- **Microservices**: Separate Pod deployment per service (zones, backend, database)
+- **Backend API**: Go-based REST API with health monitoring and CRUD operations
+- **Database Integration**: PostgreSQL with GORM ORM for data persistence
+- **User Management**: Full-stack CRUD interface in admin zone
+- **Database Seeding**: Manual seeding via Tilt UI or admin interface
+- **Live Reload**: Hot reload development workflow with Tilt
+- **Containerization**: Docker multi-stage builds for Next.js and Go apps
 
 ## What's NOT Included (Out of Scope)
 
 This is a PoC focused on architecture validation. The following are intentionally excluded:
 
-- Production-ready configurations
-- Authentication/authorization
-- Shared state management between zones
-- API layer
-- Database or persistent storage
-- CI/CD pipelines
-- Monitoring/observability
-- Horizontal scaling
-- Advanced routing patterns
+- Production-ready configurations (secrets management, environment-specific configs)
+- Authentication/authorization (JWT, OAuth, session management)
+- Shared state management between zones (Redux, Context API across zones)
+- Advanced API features (rate limiting, caching, pagination)
+- CI/CD pipelines (GitHub Actions, automated testing, deployment)
+- Monitoring/observability (Prometheus, Grafana, logging aggregation)
+- Horizontal scaling (auto-scaling, load balancing strategies)
+- Advanced routing patterns (A/B testing, feature flags)
 
 ## Next Steps
 
