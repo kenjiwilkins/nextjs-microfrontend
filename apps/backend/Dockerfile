@@ -1,6 +1,6 @@
 # Multi-stage build for Go application
 # Stage 1: Build the Go binary
-FROM golang:1.21-alpine AS builder
+FROM golang:1.22-alpine AS builder
 
 # Set working directory inside the container
 WORKDIR /app
