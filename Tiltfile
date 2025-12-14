@@ -42,6 +42,21 @@ k8s_resource(
   labels=['zones']
 )
 
+# Build backend Docker image (Go application)
+docker_build(
+  'backend',
+  context='./apps/backend',
+  dockerfile='./apps/backend/Dockerfile'
+)
+
+# Deploy backend
+k8s_yaml('./k8s/backend.yaml')
+k8s_resource(
+  'backend',
+  port_forwards='8080:8080',
+  labels=['backend']
+)
+
 # Deploy ingress
 k8s_yaml('./k8s/ingress.yaml')
 
@@ -56,5 +71,6 @@ print("""
 ║  Direct Access (for debugging):                             ║
 ║  zone-main:    http://localhost:3001                        ║
 ║  zone-admin:   http://localhost:3002                        ║
+║  backend-api:  http://localhost:8080                        ║
 ╚══════════════════════════════════════════════════════════════╝
 """)
