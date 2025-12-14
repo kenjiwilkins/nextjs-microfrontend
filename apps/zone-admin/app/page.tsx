@@ -1,3 +1,5 @@
+import ZoneHealthStatus from './components/ZoneHealthStatus'
+
 export default function Home() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-purple-50 font-sans dark:bg-purple-950">
@@ -13,6 +15,10 @@ export default function Home() {
             This is the admin zone running at <code className="bg-purple-200 dark:bg-purple-800 px-2 py-1 rounded">/admin</code>
           </p>
         </div>
+
+        {/* Display health status from the Go backend */}
+        <ZoneHealthStatus />
+
         <div className="flex flex-col gap-4 text-center">
           <p className="text-purple-600 dark:text-purple-400">
             Navigate to different zones:
