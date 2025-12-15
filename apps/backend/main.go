@@ -9,32 +9,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/nextjs-microfrontend/backend/internal/models"
 	"github.com/rs/cors"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
-
-// User represents a user in the database
-// GORM will automatically create a table called "users" from this struct
-type User struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	Email     string    `gorm:"uniqueIndex;not null" json:"email"` // Unique email addresses
-	Name      string    `gorm:"not null" json:"name"`
-	CreatedAt time.Time `json:"createdAt"` // GORM automatically manages this
-	UpdatedAt time.Time `json:"updatedAt"` // GORM automatically manages this
-}
-
-// FeatureFlag represents a feature flag in the database
-// Feature flags allow dynamic control of features without code deployments
-type FeatureFlag struct {
-	ID          uint      `gorm:"primaryKey" json:"id"`
-	Key         string    `gorm:"uniqueIndex;not null" json:"key"`         // Unique identifier (e.g., "new_dashboard")
-	Name        string    `gorm:"not null" json:"name"`                    // Human-readable name
-	Description string    `gorm:"type:text" json:"description"`            // What this flag controls
-	Enabled     bool      `gorm:"default:false;not null" json:"enabled"`   // Current state (true/false)
-	CreatedAt   time.Time `json:"createdAt"`                               // GORM automatically manages this
-	UpdatedAt   time.Time `json:"updatedAt"`                               // GORM automatically manages this
-}
 
 // ZoneStatus represents the health status of a single zone (Next.js app)
 // This struct will be converted to JSON when sent to clients
@@ -101,7 +80,7 @@ func initDB() (*gorm.DB, error) {
 	// Auto-migrate the database models
 	// This will create tables if they don't exist
 	// If tables exist, it will update them (add new columns, but won't delete existing ones)
-	if err := database.AutoMigrate(&User{}, &FeatureFlag{}); err != nil {
+	if err := database.AutoMigrate(&models.User{}, &models.FeatureFlag{}); err != nil {
 		return nil, fmt.Errorf("failed to migrate database: %w", err)
 	}
 
@@ -185,7 +164,7 @@ func zonesStatusHandler(w http.ResponseWriter, r *http.Request) {
 func getUsersHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	var users []User
+	var users []models.User
 	// Find all users in the database
 	// GORM will execute: SELECT * FROM users
 	if err := db.Find(&users).Error; err != nil {
@@ -204,7 +183,7 @@ func createUserHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	// Parse the JSON request body into a User struct
-	var user User
+	var user models.User
 	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
@@ -238,7 +217,7 @@ func getUserHandler(w http.ResponseWriter, r *http.Request) {
 	// Simple approach: parse the last segment of the path
 	id := r.PathValue("id")
 
-	var user User
+	var user models.User
 	// Find user by ID
 	// GORM will execute: SELECT * FROM users WHERE id = ?
 	if err := db.First(&user, id).Error; err != nil {
@@ -263,7 +242,7 @@ func deleteUserHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Delete the user
 	// GORM will execute: DELETE FROM users WHERE id = ?
-	result := db.Delete(&User{}, id)
+	result := db.Delete(&models.User{}, id)
 	if result.Error != nil {
 		http.Error(w, fmt.Sprintf("Database error: %v", result.Error), http.StatusInternalServerError)
 		return
@@ -287,7 +266,7 @@ func seedDatabaseHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	// Sample users to seed (same as in seed.go)
-	sampleUsers := []User{
+	sampleUsers := []models.User{
 		{Email: "alice@example.com", Name: "Alice Johnson"},
 		{Email: "bob@example.com", Name: "Bob Smith"},
 		{Email: "charlie@example.com", Name: "Charlie Brown"},
@@ -301,7 +280,7 @@ func seedDatabaseHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Insert sample users using FirstOrCreate to avoid duplicates
 	for _, user := range sampleUsers {
-		var existingUser User
+		var existingUser models.User
 		result := db.Where("email = ?", user.Email).FirstOrCreate(&existingUser, user)
 
 		if result.Error != nil {
@@ -342,7 +321,7 @@ func seedDatabaseHandler(w http.ResponseWriter, r *http.Request) {
 func getFeatureFlagsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	var flags []FeatureFlag
+	var flags []models.FeatureFlag
 	// Fetch all feature flags from the database
 	if err := db.Find(&flags).Error; err != nil {
 		http.Error(w, fmt.Sprintf("Database error: %v", err), http.StatusInternalServerError)
@@ -372,7 +351,7 @@ func getFeatureFlagHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// If not in cache, fetch from database
-	var flag FeatureFlag
+	var flag models.FeatureFlag
 	if err := db.Where("key = ?", key).First(&flag).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			http.Error(w, "Feature flag not found", http.StatusNotFound)
@@ -394,7 +373,7 @@ func createFeatureFlagHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	// Parse the JSON request body into a FeatureFlag struct
-	var flag FeatureFlag
+	var flag models.FeatureFlag
 	if err := json.NewDecoder(r.Body).Decode(&flag); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
@@ -436,7 +415,7 @@ func updateFeatureFlagHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Find the existing feature flag
-	var flag FeatureFlag
+	var flag models.FeatureFlag
 	if err := db.Where("key = ?", key).First(&flag).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			http.Error(w, "Feature flag not found", http.StatusNotFound)
@@ -453,7 +432,10 @@ func updateFeatureFlagHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Reload the updated flag
-	db.Where("key = ?", key).First(&flag)
+	if err := db.Where("key = ?", key).First(&flag).Error; err != nil {
+		http.Error(w, fmt.Sprintf("Failed to reload feature flag: %v", err), http.StatusInternalServerError)
+		return
+	}
 
 	// Update cache
 	flagCache.Store(key, flag)
@@ -470,7 +452,7 @@ func deleteFeatureFlagHandler(w http.ResponseWriter, r *http.Request) {
 	key := r.PathValue("key")
 
 	// Delete the feature flag
-	result := db.Where("key = ?", key).Delete(&FeatureFlag{})
+	result := db.Where("key = ?", key).Delete(&models.FeatureFlag{})
 	if result.Error != nil {
 		http.Error(w, fmt.Sprintf("Database error: %v", result.Error), http.StatusInternalServerError)
 		return

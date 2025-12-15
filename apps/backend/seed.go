@@ -7,31 +7,11 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"time"
 
+	"github.com/nextjs-microfrontend/backend/internal/models"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
-
-// User represents a user in the database
-type User struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	Email     string    `gorm:"uniqueIndex;not null" json:"email"`
-	Name      string    `gorm:"not null" json:"name"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
-}
-
-// FeatureFlag represents a feature flag in the database
-type FeatureFlag struct {
-	ID          uint      `gorm:"primaryKey" json:"id"`
-	Key         string    `gorm:"uniqueIndex;not null" json:"key"`
-	Name        string    `gorm:"not null" json:"name"`
-	Description string    `gorm:"type:text" json:"description"`
-	Enabled     bool      `gorm:"default:false;not null" json:"enabled"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
-}
 
 // This is a standalone program that seeds the database with sample users and feature flags
 // It can be run as a Kubernetes Job to populate test data
@@ -67,14 +47,14 @@ func main() {
 	log.Println("Database connected successfully")
 
 	// Ensure the database tables exist
-	if err := db.AutoMigrate(&User{}, &FeatureFlag{}); err != nil {
+	if err := db.AutoMigrate(&models.User{}, &models.FeatureFlag{}); err != nil {
 		log.Fatalf("Failed to migrate database: %v", err)
 	}
 
 	log.Println("Database schema migrated")
 
 	// Sample users to seed
-	sampleUsers := []User{
+	sampleUsers := []models.User{
 		{
 			Email: "alice@example.com",
 			Name:  "Alice Johnson",
@@ -103,7 +83,7 @@ func main() {
 
 	createdCount := 0
 	for _, user := range sampleUsers {
-		var existingUser User
+		var existingUser models.User
 		result := db.Where("email = ?", user.Email).FirstOrCreate(&existingUser, user)
 
 		if result.Error != nil {
@@ -126,7 +106,7 @@ func main() {
 	log.Printf("Existing users skipped: %d", len(sampleUsers)-createdCount)
 
 	// Sample feature flags to seed
-	sampleFlags := []FeatureFlag{
+	sampleFlags := []models.FeatureFlag{
 		{
 			Key:         "show_welcome_banner",
 			Name:        "Show Welcome Banner",
@@ -153,7 +133,7 @@ func main() {
 
 	createdFlagCount := 0
 	for _, flag := range sampleFlags {
-		var existingFlag FeatureFlag
+		var existingFlag models.FeatureFlag
 		result := db.Where("key = ?", flag.Key).FirstOrCreate(&existingFlag, flag)
 
 		if result.Error != nil {
