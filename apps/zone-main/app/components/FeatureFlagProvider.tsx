@@ -46,7 +46,6 @@ export function FeatureFlagProvider({ children }: FeatureFlagProviderProps) {
   // Fetch all feature flags from the backend
   const fetchFlags = useCallback(async () => {
     try {
-      setLoading(true)
       const response = await fetch(`${backendUrl}/api/feature-flags`)
 
       if (!response.ok) {
@@ -68,6 +67,8 @@ export function FeatureFlagProvider({ children }: FeatureFlagProviderProps) {
       setError(err instanceof Error ? err.message : 'Failed to fetch feature flags')
       // On error, keep existing flags or use empty object
     } finally {
+      // Only set loading to false after initial fetch
+      // This prevents UI flickering during polling updates
       setLoading(false)
     }
   }, [backendUrl])
