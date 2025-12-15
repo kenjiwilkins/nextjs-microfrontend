@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/rs/cors"
@@ -21,6 +22,18 @@ type User struct {
 	Name      string    `gorm:"not null" json:"name"`
 	CreatedAt time.Time `json:"createdAt"` // GORM automatically manages this
 	UpdatedAt time.Time `json:"updatedAt"` // GORM automatically manages this
+}
+
+// FeatureFlag represents a feature flag in the database
+// Feature flags allow dynamic control of features without code deployments
+type FeatureFlag struct {
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	Key         string    `gorm:"uniqueIndex;not null" json:"key"`         // Unique identifier (e.g., "new_dashboard")
+	Name        string    `gorm:"not null" json:"name"`                    // Human-readable name
+	Description string    `gorm:"type:text" json:"description"`            // What this flag controls
+	Enabled     bool      `gorm:"default:false;not null" json:"enabled"`   // Current state (true/false)
+	CreatedAt   time.Time `json:"createdAt"`                               // GORM automatically manages this
+	UpdatedAt   time.Time `json:"updatedAt"`                               // GORM automatically manages this
 }
 
 // ZoneStatus represents the health status of a single zone (Next.js app)
@@ -44,6 +57,11 @@ type HealthResponse struct {
 var (
 	// Database connection (will be initialized in main)
 	db *gorm.DB
+
+	// Feature flag cache for performance
+	// Stores feature flags in memory to reduce database queries
+	// Key: flag key (string), Value: FeatureFlag struct
+	flagCache sync.Map
 
 	// Zone URLs for health checks
 	// These are INTERNAL Kubernetes service URLs (pod-to-pod communication)
@@ -80,10 +98,10 @@ func initDB() (*gorm.DB, error) {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
 
-	// Auto-migrate the User model
-	// This will create the "users" table if it doesn't exist
-	// If the table exists, it will update it (add new columns, but won't delete existing ones)
-	if err := database.AutoMigrate(&User{}); err != nil {
+	// Auto-migrate the database models
+	// This will create tables if they don't exist
+	// If tables exist, it will update them (add new columns, but won't delete existing ones)
+	if err := database.AutoMigrate(&User{}, &FeatureFlag{}); err != nil {
 		return nil, fmt.Errorf("failed to migrate database: %w", err)
 	}
 
@@ -319,6 +337,160 @@ func seedDatabaseHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
+// getFeatureFlagsHandler responds to GET /api/feature-flags
+// Returns a list of all feature flags from the database
+func getFeatureFlagsHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	var flags []FeatureFlag
+	// Fetch all feature flags from the database
+	if err := db.Find(&flags).Error; err != nil {
+		http.Error(w, fmt.Sprintf("Database error: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Update cache with fresh data
+	for _, flag := range flags {
+		flagCache.Store(flag.Key, flag)
+	}
+
+	json.NewEncoder(w).Encode(flags)
+}
+
+// getFeatureFlagHandler responds to GET /api/feature-flags/{key}
+// Returns a specific feature flag by its key
+func getFeatureFlagHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// Extract key from URL path
+	key := r.PathValue("key")
+
+	// Try to get from cache first
+	if cached, ok := flagCache.Load(key); ok {
+		json.NewEncoder(w).Encode(cached)
+		return
+	}
+
+	// If not in cache, fetch from database
+	var flag FeatureFlag
+	if err := db.Where("key = ?", key).First(&flag).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			http.Error(w, "Feature flag not found", http.StatusNotFound)
+		} else {
+			http.Error(w, fmt.Sprintf("Database error: %v", err), http.StatusInternalServerError)
+		}
+		return
+	}
+
+	// Store in cache for future requests
+	flagCache.Store(key, flag)
+
+	json.NewEncoder(w).Encode(flag)
+}
+
+// createFeatureFlagHandler responds to POST /api/feature-flags
+// Creates a new feature flag in the database
+func createFeatureFlagHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// Parse the JSON request body into a FeatureFlag struct
+	var flag FeatureFlag
+	if err := json.NewDecoder(r.Body).Decode(&flag); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Validate required fields
+	if flag.Key == "" || flag.Name == "" {
+		http.Error(w, "Key and name are required", http.StatusBadRequest)
+		return
+	}
+
+	// Create the feature flag in the database
+	if err := db.Create(&flag).Error; err != nil {
+		http.Error(w, fmt.Sprintf("Failed to create feature flag: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Add to cache
+	flagCache.Store(flag.Key, flag)
+
+	// Return the created feature flag
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(flag)
+}
+
+// updateFeatureFlagHandler responds to PATCH /api/feature-flags/{key}
+// Updates a feature flag's properties (typically to toggle enabled state)
+func updateFeatureFlagHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// Extract key from URL path
+	key := r.PathValue("key")
+
+	// Parse the update data
+	var updates map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&updates); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Find the existing feature flag
+	var flag FeatureFlag
+	if err := db.Where("key = ?", key).First(&flag).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			http.Error(w, "Feature flag not found", http.StatusNotFound)
+		} else {
+			http.Error(w, fmt.Sprintf("Database error: %v", err), http.StatusInternalServerError)
+		}
+		return
+	}
+
+	// Update the flag with provided fields
+	if err := db.Model(&flag).Updates(updates).Error; err != nil {
+		http.Error(w, fmt.Sprintf("Failed to update feature flag: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Reload the updated flag
+	db.Where("key = ?", key).First(&flag)
+
+	// Update cache
+	flagCache.Store(key, flag)
+
+	json.NewEncoder(w).Encode(flag)
+}
+
+// deleteFeatureFlagHandler responds to DELETE /api/feature-flags/{key}
+// Deletes a feature flag by its key
+func deleteFeatureFlagHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// Extract key from URL path
+	key := r.PathValue("key")
+
+	// Delete the feature flag
+	result := db.Where("key = ?", key).Delete(&FeatureFlag{})
+	if result.Error != nil {
+		http.Error(w, fmt.Sprintf("Database error: %v", result.Error), http.StatusInternalServerError)
+		return
+	}
+
+	// Check if any rows were affected
+	if result.RowsAffected == 0 {
+		http.Error(w, "Feature flag not found", http.StatusNotFound)
+		return
+	}
+
+	// Remove from cache
+	flagCache.Delete(key)
+
+	// Return success message
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "Feature flag deleted successfully",
+	})
+}
+
 // main is the entry point of the application
 func main() {
 	// Initialize database connection
@@ -344,6 +516,13 @@ func main() {
 	mux.HandleFunc("GET /api/users/{id}", getUserHandler)       // Get single user
 	mux.HandleFunc("DELETE /api/users/{id}", deleteUserHandler) // Delete user
 
+	// Feature flag management endpoints
+	mux.HandleFunc("GET /api/feature-flags", getFeatureFlagsHandler)              // List all feature flags
+	mux.HandleFunc("GET /api/feature-flags/{key}", getFeatureFlagHandler)         // Get specific flag
+	mux.HandleFunc("POST /api/feature-flags", createFeatureFlagHandler)           // Create new flag
+	mux.HandleFunc("PATCH /api/feature-flags/{key}", updateFeatureFlagHandler)    // Update flag
+	mux.HandleFunc("DELETE /api/feature-flags/{key}", deleteFeatureFlagHandler)   // Delete flag
+
 	// Database seeding endpoint
 	mux.HandleFunc("POST /api/seed", seedDatabaseHandler)       // Seed database with sample data
 
@@ -351,7 +530,7 @@ func main() {
 	// This allows the Next.js admin frontend to make API calls to this backend
 	handler := cors.New(cors.Options{
 		AllowedOrigins: []string{"*"}, // Allow requests from any origin (in production, specify exact origins)
-		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders: []string{"Content-Type"},
 	}).Handler(mux)
 
