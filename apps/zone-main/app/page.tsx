@@ -1,3 +1,5 @@
+import WelcomeBanner from './components/WelcomeBanner'
+
 export default function Home() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-blue-50 font-sans dark:bg-blue-950">
@@ -13,6 +15,10 @@ export default function Home() {
             This is the main zone running at <code className="bg-blue-200 dark:bg-blue-800 px-2 py-1 rounded">/</code>
           </p>
         </div>
+
+        {/* Feature flag controlled welcome banner */}
+        <WelcomeBanner />
+
         <div className="flex flex-col gap-4 text-center">
           <p className="text-blue-600 dark:text-blue-400">
             Navigate to different zones:
