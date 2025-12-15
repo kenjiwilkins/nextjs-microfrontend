@@ -1,17 +1,28 @@
+//go:build seed
+// +build seed
+
 package main
 
 import (
 	"fmt"
 	"log"
 	"os"
-	"time"
 
+	"github.com/nextjs-microfrontend/backend/internal/models"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
-// This is a standalone program that seeds the database with sample users
+// This is a standalone program that seeds the database with sample users and feature flags
 // It can be run as a Kubernetes Job to populate test data
+
+// getEnv retrieves an environment variable or returns a fallback value
+func getEnv(key, fallback string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return fallback
+}
 
 func main() {
 	log.Println("=== Database Seeder ===")
@@ -35,15 +46,15 @@ func main() {
 
 	log.Println("Database connected successfully")
 
-	// Ensure the users table exists
-	if err := db.AutoMigrate(&User{}); err != nil {
+	// Ensure the database tables exist
+	if err := db.AutoMigrate(&models.User{}, &models.FeatureFlag{}); err != nil {
 		log.Fatalf("Failed to migrate database: %v", err)
 	}
 
 	log.Println("Database schema migrated")
 
 	// Sample users to seed
-	sampleUsers := []User{
+	sampleUsers := []models.User{
 		{
 			Email: "alice@example.com",
 			Name:  "Alice Johnson",
@@ -72,7 +83,7 @@ func main() {
 
 	createdCount := 0
 	for _, user := range sampleUsers {
-		var existingUser User
+		var existingUser models.User
 		result := db.Where("email = ?", user.Email).FirstOrCreate(&existingUser, user)
 
 		if result.Error != nil {
@@ -89,8 +100,60 @@ func main() {
 		}
 	}
 
-	log.Printf("\n=== Seeding Complete ===")
+	log.Printf("\n=== User Seeding Complete ===")
 	log.Printf("Total users processed: %d", len(sampleUsers))
 	log.Printf("New users created: %d", createdCount)
 	log.Printf("Existing users skipped: %d", len(sampleUsers)-createdCount)
+
+	// Sample feature flags to seed
+	sampleFlags := []models.FeatureFlag{
+		{
+			Key:         "show_welcome_banner",
+			Name:        "Show Welcome Banner",
+			Description: "Displays a welcome banner on the main page",
+			Enabled:     false, // Start disabled
+		},
+		{
+			Key:         "new_user_dashboard",
+			Name:        "New User Dashboard",
+			Description: "Enable the redesigned user dashboard interface",
+			Enabled:     false,
+		},
+		{
+			Key:         "beta_features",
+			Name:        "Beta Features",
+			Description: "Enable access to beta features for testing",
+			Enabled:     false,
+		},
+	}
+
+	// Insert sample feature flags
+	// Using FirstOrCreate to avoid duplicates (won't insert if key already exists)
+	log.Printf("\n\nSeeding %d feature flags...", len(sampleFlags))
+
+	createdFlagCount := 0
+	for _, flag := range sampleFlags {
+		var existingFlag models.FeatureFlag
+		result := db.Where("key = ?", flag.Key).FirstOrCreate(&existingFlag, flag)
+
+		if result.Error != nil {
+			log.Printf("Error creating feature flag %s: %v", flag.Key, result.Error)
+			continue
+		}
+
+		// Check if a new record was created (RowsAffected > 0 means it was created, not found)
+		if result.RowsAffected > 0 {
+			createdFlagCount++
+			log.Printf("✓ Created feature flag: %s (%s)", flag.Name, flag.Key)
+		} else {
+			log.Printf("- Skipped (already exists): %s (%s)", flag.Name, flag.Key)
+		}
+	}
+
+	log.Printf("\n=== Feature Flag Seeding Complete ===")
+	log.Printf("Total feature flags processed: %d", len(sampleFlags))
+	log.Printf("New flags created: %d", createdFlagCount)
+	log.Printf("Existing flags skipped: %d", len(sampleFlags)-createdFlagCount)
+
+	log.Println("\n\n=== ALL SEEDING COMPLETE ===")
 }

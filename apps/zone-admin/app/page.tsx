@@ -1,5 +1,6 @@
 import ZoneHealthStatus from './components/ZoneHealthStatus'
 import UserManagement from './components/UserManagement'
+import FeatureFlagManagement from './components/FeatureFlagManagement'
 
 export default function Home() {
   return (
@@ -22,6 +23,9 @@ export default function Home() {
 
         {/* User management with PostgreSQL backend */}
         <UserManagement />
+
+        {/* Feature flag management */}
+        <FeatureFlagManagement />
 
         <div className="flex flex-col gap-4 text-center">
           <p className="text-purple-600 dark:text-purple-400">
