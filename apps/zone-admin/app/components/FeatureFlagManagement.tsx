@@ -87,11 +87,14 @@ export default function FeatureFlagManagement() {
         throw new Error(errorText || 'Failed to create feature flag')
       }
 
+      // Parse the created flag from the response
+      const createdFlag: FeatureFlag = await response.json()
+
+      // Add the new flag to the local state instead of re-fetching
+      setFlags([...flags, createdFlag])
+
       // Clear the form
       setNewFlag({ key: '', name: '', description: '' })
-
-      // Refresh the flag list
-      await fetchFlags()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create feature flag')
     } finally {
@@ -116,8 +119,11 @@ export default function FeatureFlagManagement() {
         throw new Error('Failed to toggle feature flag')
       }
 
-      // Refresh the flag list
-      await fetchFlags()
+      // Parse the updated flag from the response
+      const updatedFlag: FeatureFlag = await response.json()
+
+      // Update the specific flag in local state instead of re-fetching
+      setFlags(flags.map(flag => flag.key === key ? updatedFlag : flag))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to toggle feature flag')
     }
@@ -138,8 +144,8 @@ export default function FeatureFlagManagement() {
         throw new Error('Failed to delete feature flag')
       }
 
-      // Refresh the flag list
-      await fetchFlags()
+      // Remove the flag from local state instead of re-fetching
+      setFlags(flags.filter(flag => flag.key !== key))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete feature flag')
     }
