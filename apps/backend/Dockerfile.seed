@@ -11,8 +11,8 @@ RUN go mod download
 # Copy the source code
 COPY . .
 
-# Build the seed binary
-RUN CGO_ENABLED=0 GOOS=linux go build -o seed seed.go
+# Build the seed binary with the seed build tag
+RUN CGO_ENABLED=0 GOOS=linux go build -tags seed -o seed seed.go
 
 # Stage 2: Create the final minimal image
 FROM alpine:latest
